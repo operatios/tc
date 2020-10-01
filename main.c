@@ -1,27 +1,42 @@
 #include <stdio.h>
 
+#include <winsock2.h>
+
 #include "tc.h"
 
 int main(int argc, char *argv[])
 {
-    if (argc != 4) {
-        puts("Usage: tc oauth:YOUR_TOKEN user channel");
+    if (argc == 1) {
+        puts("Usage: tc channel [oauth:token, username]");
         return 1;
     }
 
-    int init_result = tc_socket_init();
+    SOCKET sock;
+    int init_result = tc_socket_init(&sock);
+
     if (init_result != 0) {
         puts("Could not initialize a socket");
         return init_result;
     }
 
-    tc_login(argv[1], argv[2]);
-    tc_join(argv[3]);
+    if (argc < 4) {
+        puts("Logging in anonymously");
+        // PASS can be any non-empty string, NICK has to be justinfan*
+        tc_login(&sock, "anon", "justinfan65");
+    } else {
+        tc_login(&sock, argv[2], argv[3]);
+    }
 
-    char buf[4096];
-    tc_recv(buf, sizeof(buf));
-    printf("%s\n", buf);
+    tc_join(&sock, argv[1]);
 
-    tc_socket_close();
+    tc_send(&sock, "CAP REQ :twitch.tv/tags");
+    tc_send(&sock, "CAP REQ :twitch.tv/commands");
+
+    // Add signal handle to call tc_socket_close() before exiting
+    while (1) {
+        tc_recv_event(&sock);
+    }
+
+    tc_socket_close(&sock);
     return 0;
 }

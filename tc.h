@@ -1,15 +1,19 @@
 #ifndef TC_H
 #define TC_H
 
-int tc_socket_init(void);
-void tc_socket_close(void);
+#include <winsock2.h>
 
-int tc_send(const char *data);
-int tc_send_cmd(const char *cmd, const char *arg);
+int tc_socket_init(SOCKET *s);
+void tc_socket_close(SOCKET *s);
 
-int tc_recv(char *buf, int bufsize);
+int tc_send(SOCKET *s, const char *data);
+int tc_send_arg(SOCKET *s, const char *cmd, const char *arg);
 
-void tc_login(const char *pass, const char *nick);
-void tc_join(const char *channel);
+int tc_recv(SOCKET *s, char *buf, int bufsize);
 
-#endif // TC_H
+void tc_recv_event(SOCKET *s);
+
+void tc_login(SOCKET *s, const char *pass, const char *nick);
+void tc_join(SOCKET *s, const char *channel);
+
+#endif /* TC_H */

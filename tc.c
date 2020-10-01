@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdio.h>
 
 #define WIN32_LEAN_AND_MEAN
@@ -5,12 +6,12 @@
 #include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
 
-#define ADDR "irc.chat.twitch.tv"
-#define PORT "6667"
+#define TC_RECV_BUF 2048
 
-SOCKET tc_socket;
+#define TC_ADDR "irc.chat.twitch.tv"
+#define TC_PORT "6667"
 
-int tc_socket_init(void)
+int tc_socket_init(SOCKET *s)
 {
     WSADATA wsa_data;
     if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0) {
@@ -25,55 +26,74 @@ int tc_socket_init(void)
     hints.ai_protocol = IPPROTO_TCP;
 
     struct addrinfo *peer;
-    getaddrinfo(ADDR, PORT, &hints, &peer);
+    getaddrinfo(TC_ADDR, TC_PORT, &hints, &peer);
 
-    tc_socket = socket(peer->ai_family, peer->ai_socktype, peer->ai_protocol);
+    *s = socket(peer->ai_family, peer->ai_socktype, peer->ai_protocol);
 
-    if (tc_socket == INVALID_SOCKET) {
+    if (*s == INVALID_SOCKET) {
         return -1;
     }
 
-    if (connect(tc_socket, peer->ai_addr, peer->ai_addrlen) == SOCKET_ERROR) {
+    if (connect(*s, peer->ai_addr, peer->ai_addrlen) == SOCKET_ERROR) {
         return -1;
     }
 
     freeaddrinfo(peer);
-
     return 0;
 }
 
-void tc_socket_close(void)
+void tc_socket_close(SOCKET *s)
 {
-    closesocket(tc_socket);
+    closesocket(*s);
     WSACleanup();
 }
 
-int tc_send(const char *data)
+int tc_send(SOCKET *s, const char *data)
 {
-    return send(tc_socket, data, strlen(data), 0);
+    char send_buf[strlen(data) + 3]; // 3 is \r\n\0
+    snprintf(send_buf, sizeof(send_buf), "%s\r\n", data);
+
+    printf("-> `%s`\n", data);
+    assert(send_buf[sizeof(send_buf) - 3] == '\r');
+    assert(send_buf[sizeof(send_buf) - 2] == '\n');
+    assert(send_buf[sizeof(send_buf) - 1] == '\0');
+
+    return send(*s, send_buf, strlen(send_buf), 0);
 }
 
-int tc_send_cmd(const char *cmd, const char *arg)
+int tc_send_arg(SOCKET *s, const char *cmd, const char *arg)
 {
-    size_t bufsize = strlen(cmd) + strlen(arg) + 3; // 3 is "\r\n\0"
-    char buf[bufsize];
+    char buf[strlen(cmd) + strlen(arg) + 1];
+    snprintf(buf, sizeof(buf), "%s%s", cmd, arg);
 
-    snprintf(buf, sizeof(buf), "%s%s\r\n", cmd, arg);
-    return tc_send(buf);
+    return tc_send(s, buf);
 }
 
-int tc_recv(char *buf, int bufsize)
+int tc_recv(SOCKET *s, char *buf, int bufsize)
 {
-    return recv(tc_socket, buf, bufsize, 0);
+    return recv(*s, buf, bufsize, 0);
 }
 
-void tc_login(const char *pass, const char *nick)
+void tc_recv_event(SOCKET *s)
 {
-    tc_send_cmd("PASS ", pass);
-    tc_send_cmd("NICK ", nick);
+    char buf[TC_RECV_BUF];
+    int size = tc_recv(s, buf, sizeof(buf));
+    buf[size] = '\0';
+
+    if (strcmp(buf, "PING :tmi.twitch.tv\r\n") == 0) {
+        tc_send(s, "PONG :tmi.twitch.tv");
+    } else {
+        printf("%s", buf);
+    }
 }
 
-void tc_join(const char *channel)
+void tc_login(SOCKET *s, const char *pass, const char *nick)
 {
-    tc_send_cmd("JOIN #", channel);
+    tc_send_arg(s, "PASS ", pass);
+    tc_send_arg(s, "NICK ", nick);
+}
+
+void tc_join(SOCKET *s, const char *channel)
+{
+    tc_send_arg(s, "JOIN #", channel);
 }

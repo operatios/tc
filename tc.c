@@ -24,7 +24,7 @@ int tc_socket_init(void)
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
 
-    struct addrinfo* peer;
+    struct addrinfo *peer;
     getaddrinfo(ADDR, PORT, &hints, &peer);
 
     tc_socket = socket(peer->ai_family, peer->ai_socktype, peer->ai_protocol);
@@ -48,12 +48,12 @@ void tc_socket_close(void)
     WSACleanup();
 }
 
-int tc_send(const char* data)
+int tc_send(const char *data)
 {
     return send(tc_socket, data, strlen(data), 0);
 }
 
-int tc_send_cmd(const char* cmd, const char* arg)
+int tc_send_cmd(const char *cmd, const char *arg)
 {
     size_t bufsize = strlen(cmd) + strlen(arg) + 3; // 3 is "\r\n\0"
     char buf[bufsize];
@@ -62,18 +62,18 @@ int tc_send_cmd(const char* cmd, const char* arg)
     return tc_send(buf);
 }
 
-int tc_recv(char* buf, int bufsize)
+int tc_recv(char *buf, int bufsize)
 {
     return recv(tc_socket, buf, bufsize, 0);
 }
 
-void tc_login(const char* pass, const char* nick)
+void tc_login(const char *pass, const char *nick)
 {
     tc_send_cmd("PASS ", pass);
     tc_send_cmd("NICK ", nick);
 }
 
-void tc_join(const char* channel)
+void tc_join(const char *channel)
 {
     tc_send_cmd("JOIN #", channel);
 }

@@ -7,5 +7,12 @@ UseTab: Never
 
 PointerAlignment: Right
 SortIncludes: 'false'
+
+AlignAfterOpenBracket: 'AlwaysBreak'
+BinPackArguments: 'false'
+BinPackParameters: 'false'
+
 AllowShortFunctionsOnASingleLine: 'false'
+AlignConsecutiveAssignments: 'true'
+AlignConsecutiveMacros: 'true'
 ...

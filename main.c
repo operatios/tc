@@ -1,8 +1,17 @@
 #include <stdio.h>
-
-#include <winsock2.h>
+#include <signal.h>
 
 #include "tc.h"
+#include "colors.h"
+
+static SOCKET s;
+
+static void handle_sigint(int _)
+{
+    (void)_;
+    tc_socket_close(s);
+    exit(0);
+}
 
 int main(int argc, char *argv[])
 {
@@ -11,32 +20,29 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    SOCKET sock;
-    int init_result = tc_socket_init(&sock);
+    signal(SIGINT, handle_sigint);
+    enable_colors();
 
-    if (init_result != 0) {
+    int err = tc_socket_init(&s);
+
+    if (err != 0) {
         puts("Could not initialize a socket");
-        return init_result;
+        exit(err);
     }
 
     if (argc < 4) {
         puts("Logging in anonymously");
         // PASS can be any non-empty string, NICK has to be justinfan*
-        tc_login(&sock, "anon", "justinfan65");
+        tc_login(s, "anon", "justinfan65");
     } else {
-        tc_login(&sock, argv[2], argv[3]);
+        tc_login(s, argv[2], argv[3]);
     }
 
-    tc_join(&sock, argv[1]);
+    tc_join(s, argv[1]);
+    tc_send(s, "CAP REQ :twitch.tv/tags");
+    tc_send(s, "CAP REQ :twitch.tv/commands");
 
-    tc_send(&sock, "CAP REQ :twitch.tv/tags");
-    tc_send(&sock, "CAP REQ :twitch.tv/commands");
-
-    // Add signal handle to call tc_socket_close() before exiting
     while (1) {
-        tc_recv_event(&sock);
+        tc_recv_events(s);
     }
-
-    tc_socket_close(&sock);
-    return 0;
 }

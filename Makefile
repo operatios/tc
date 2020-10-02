@@ -1,7 +1,7 @@
 CC=clang
 CFLAGS=-std=c99 -pedantic -Wall -Wextra -Werror -Wwrite-strings
 
-SOURCES = main.c tc.c
+SOURCES = main.c tc.c colors.c
 OBJECTS = $(SOURCES:.c=.o)
 
 

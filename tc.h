@@ -4,16 +4,14 @@
 #include <winsock2.h>
 
 int tc_socket_init(SOCKET *s);
-void tc_socket_close(SOCKET *s);
+void tc_socket_close(SOCKET s);
 
-int tc_send(SOCKET *s, const char *data);
-int tc_send_arg(SOCKET *s, const char *cmd, const char *arg);
+int tc_send(SOCKET s, const char *data);
 
-int tc_recv(SOCKET *s, char *buf, int bufsize);
+void tc_login(SOCKET s, const char *pass, const char *nick);
+void tc_join(SOCKET s, const char *channel);
+void tc_send_msg(SOCKET s, const char *channel, const char *msg);
 
-void tc_recv_event(SOCKET *s);
-
-void tc_login(SOCKET *s, const char *pass, const char *nick);
-void tc_join(SOCKET *s, const char *channel);
+void tc_recv_events(SOCKET s);
 
 #endif /* TC_H */

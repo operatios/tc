@@ -12,7 +12,20 @@
 #define TC_PORT    "6667"
 #define TC_BUFSIZE 2048
 
+// @todo: replace strstr with strchr
+
+/* Event types, we only care about PING and PRIVMSG */
 enum { OTHER, PING, PRIVMSG };
+
+/* Badges flags */
+enum {
+    SUB         = 1 << 0,
+    MOD         = 1 << 1,
+    BROADCASTER = 1 << 2,
+    GLOBAL_MOD  = 1 << 3,
+    STAFF       = 1 << 4,
+    ADMIN       = 1 << 5,
+};
 
 typedef struct {
     char name[26];
@@ -22,9 +35,11 @@ typedef struct {
 tc_msg *tc_msg_new(const char *name, const char *text)
 {
     assert(strlen(name) < 26);
-
     tc_msg *msg = malloc(sizeof(tc_msg));
+
     strncpy_s(msg->name, sizeof(msg->name), name, sizeof(msg->name) - 1);
+    assert(sizeof(msg->name) == 26);
+
     msg->text = _strdup(text);
 
     return msg;
@@ -123,50 +138,38 @@ int tc_get_event_type(const char *line)
     char *cmd_start;
     if (line[0] == '@') {
         char *tags_end = strstr(line, " ");
-        assert(tags_end != NULL);
-
-        cmd_start = strstr(tags_end + 1, " ") + 1;
+        cmd_start      = strstr(tags_end + 1, " ") + 1;
 
     } else {
-
-        if (line[0] != ':') {
-            printf("broken line: '%s'", line);
-        }
-
         assert(line[0] == ':');
         cmd_start = strstr(line, " ") + 1;
     }
 
-    assert(cmd_start != NULL);
+    char *cmd_end = strstr(cmd_start, " ");
 
-    char *cmd_end = strstr(cmd_start + 1, " ") + 1;
-    assert(cmd_end != NULL);
-
-    char cmd[cmd_end - cmd_start];
-
+    char cmd[(cmd_end - cmd_start) + 1];
     strncpy_s(cmd, sizeof(cmd), cmd_start, sizeof(cmd) - 1);
 
     if (strcmp(cmd, "PRIVMSG") == 0) {
         return PRIVMSG;
     }
-
     return OTHER;
 }
 
-tc_msg *tc_parse_msg(const char *line)
+tc_msg *tc_parse_msg(char *line)
 {
     assert(line[0] == '@');
 
-    char *tags_start = (char *)line + 1;
+    char *tags_start = line + 1;
     char *tags_end   = strstr(line, " :");
 
-    size_t tags_len = tags_end - tags_start;
-    assert(tags_len > 0);
+    ptrdiff_t tags_len = tags_end - tags_start;
+
+    /* tag parsing
 
     char tags[tags_len + 1];
     strncpy_s(tags, sizeof(tags), tags_start, sizeof(tags) - 1);
 
-    /*
     char *context = tags;
     char *pair    = strtok_s(context, ";", &context);
     while (pair != NULL) {
@@ -186,7 +189,7 @@ tc_msg *tc_parse_msg(const char *line)
     char *name_start = tags_end + 2;
     char *name_end   = strstr(name_start, "!");
 
-    size_t name_len = name_end - name_start;
+    ptrdiff_t name_len = name_end - name_start;
     char name[name_len + 1];
 
     strncpy_s(name, sizeof(name), name_start, sizeof(name) - 1);
@@ -198,36 +201,62 @@ tc_msg *tc_parse_msg(const char *line)
 
 void tc_recv_events(SOCKET s)
 {
-    char buf[TC_BUFSIZE];
-    int size = tc_recv(s, buf, sizeof(buf));
+    size_t bufsize = TC_BUFSIZE;
+    char *buf      = malloc(sizeof(char) * bufsize);
 
-    if (size == -1) {
+    int offset = tc_recv(s, buf, bufsize);
+
+    if (offset == -1) {
         return;
     }
-    buf[size] = '\0';
 
-    char *context = buf;
-    char *line    = strtok_s(context, "\r\n", &context);
+    // clang-format off
+    while (buf[offset - 1] != '\0' &&
+           buf[offset - 2] != '\n' &&
+           buf[offset - 3] != '\r')
+    // clang-format on
+    {
 
-    while (line != NULL) {
-        int event_type = tc_get_event_type(line);
+        if (offset >= (int)bufsize) {
+            bufsize *= 2;
+            buf = realloc(buf, sizeof(char) * bufsize);
+        }
+
+        int result = tc_recv(s, buf + offset, bufsize - offset);
+
+        if (result == -1) {
+            break;
+        }
+
+        offset += result;
+    }
+
+    char *line_offset = buf;
+
+    while (line_offset - buf < offset) {
+        char *line_end     = strstr(line_offset, "\r\n\0");
+        ptrdiff_t line_len = line_end - line_offset;
+
+        char token[line_len + 1];
+        strncpy_s(token, sizeof(token), line_offset, sizeof(token) - 1);
+
+        int event_type = tc_get_event_type(token);
 
         switch (event_type) {
         case PING:
             tc_send(s, "PONG :tmi.twitch.tv");
             break;
         case PRIVMSG: {
-            tc_msg *msg = tc_parse_msg(line);
-
-            printf("%s: %s\n", msg->name, msg->text);
-
+            tc_msg *msg = tc_parse_msg(token);
+            printf("%s:%s\n", msg->name, msg->text);
             tc_msg_free(msg);
             break;
         }
         }
 
-        line = strtok_s(context, "\r\n", &context);
+        line_offset = line_end + 3;
     }
+    free(buf);
 }
 
 void tc_login(SOCKET s, const char *pass, const char *nick)
